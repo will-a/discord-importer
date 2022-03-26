@@ -37,10 +37,14 @@ client = discord.Client()
 async def post_message_to_elastic(message:discord.Message, verbose:bool=False) -> requests.Response:
     payload = {
         '@timestamp': message.created_at.strftime('%Y-%m-%dT%H:%M:%SZ'),
-        'author': str(message.author),
+        'author': {
+            'full_user': str(message.author),
+            'name': message.author.name,
+            'id': str(message.author.id)
+        },
         'body': message.content,
         'channel': {
-            'id': message.channel.id,
+            'id': str(message.channel.id),
             'name': message.channel.name
         },
         'attachments': [{'type': attachment.content_type, 'url': attachment.url } for attachment in message.attachments]
@@ -54,7 +58,7 @@ async def post_message_to_elastic(message:discord.Message, verbose:bool=False) -
     )
 
     if verbose:
-        await message.channel.send("{}: {}".format(resp.status_code, resp.content))
+        await message.channel.send("{}: `{}`".format(resp.status_code, resp.content))
 
 
 @client.event

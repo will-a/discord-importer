@@ -1,3 +1,5 @@
+# Author: Will Anderson (@will-a)
+
 import json
 import discord
 import requests

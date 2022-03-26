@@ -1,12 +1,15 @@
 import json
 import discord
 import requests
+from pathlib import Path
 requests.packages.urllib3.disable_warnings()
 
 
+root = str(Path(__file__).parent)
+
 # read configs
 try:
-    with open('configs.json', 'r') as configs_file:
+    with open(root + '/configs.json', 'r') as configs_file:
         configs = json.loads(configs_file.read())
 except OSError:
     print("ERROR: could not read configs.json")

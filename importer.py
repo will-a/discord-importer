@@ -11,7 +11,7 @@ root = str(Path(__file__).parent)
 
 # read configs
 try:
-    with open(root + '/configs.json', 'r') as configs_file:
+    with open(f'{root}/configs.json', 'r') as configs_file:
         configs = json.loads(configs_file.read())
 except OSError:
     print("ERROR: could not read configs.json")
@@ -34,6 +34,12 @@ if superusers is None:
 elastic_base_url = configs.get('host')
 if elastic_base_url is None:
     print("ERROR: No host found in configs.json")
+    exit(1)
+
+elastic_index = configs.get('index')
+if elastic_index is None:
+    print("ERROR: Elastic index not provided")
+    exit(1)
 
 verbose = False
 client = discord.Client()
@@ -56,19 +62,19 @@ async def post_message_to_elastic(message:discord.Message, verbose:bool=False) -
     }
 
     resp = requests.post(
-        url=elastic_base_url + 'hideout/_doc',
+        url=f'{elastic_base_url}{elastic_index}/_doc',
         data=json.dumps(payload),
-        headers={'Content-Type': 'application/json','Authorization': "ApiKey {}".format(elastic_token)},
+        headers={'Content-Type': 'application/json','Authorization': f"ApiKey {elastic_token}"},
         verify=False
     )
 
     if verbose:
-        await message.channel.send("{}: `{}`".format(resp.status_code, resp.content))
+        await message.channel.send(f"{resp.status_code}: `{resp.content}`")
 
 
 @client.event
 async def on_ready():
-    print("Logged in as {user}".format(user=client.user))
+    print(f"Logged in as {client.user}")
 
 
 @client.event
@@ -81,22 +87,21 @@ async def on_message(message):
         command = message.content[1:].split(' ')[0]
         
         if command == 'ingest':
-            await message.channel.send("Ingesting messages from {channel}...".format(channel=message.channel.name))
+            await message.channel.send(f"Ingesting messages from {message.channel.name}...")
             message_count = 0
             async for historic_message in message.channel.history(limit=None):
                 if historic_message.author != client.user:
                     await post_message_to_elastic(historic_message)
                     message_count += 1
-            
-            await message.channel.send("Successfully ingested {num_messages} messages from {channel}.".format(
-                num_messages=message_count, channel=message.channel.name
-            ))
+
+            await message.channel.send(f"Successfully ingested {message_count} messages from {message.channel.name}.")
             return
         elif command == 'verbose':
             verbose = False if verbose else True
-            await message.channel.send("Verbose toggled to {verbose}.".format(verbose=verbose))
+            await message.channel.send(f"Verbose toggled to {verbose}.")
             return
 
     await post_message_to_elastic(message, verbose)
+
 
 client.run(discord_token)

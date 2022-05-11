@@ -12,7 +12,7 @@ requests.packages.urllib3.disable_warnings()
 
 logging.basicConfig(level=logging.INFO)
 ROOT = str(Path(__file__).parent)
-
+# hello
 # read configs
 try:
     with open(f'{ROOT}/configs.json', 'r', encoding='utf-8') as configs_file:
@@ -94,7 +94,7 @@ async def post_message_to_elastic(message: discord.Message) -> requests.Response
 
 @client.event
 async def on_ready():
-    """
+    """  
     Function automatically called when Discord client is ready.
     """
     logging.info("Logged in as %s", client.user)

@@ -3,6 +3,7 @@
 import sys
 import json
 import logging
+from time import time
 from pathlib import Path
 
 import discord
@@ -49,6 +50,31 @@ verbose = False
 client = discord.Client()
 
 
+async def ingest_messages(channel: discord.TextChannel) -> None:
+    """
+    Ingest all messages from the given Discord channel into the Elastic database
+    specified in configs.json.
+
+    params
+    ------
+    channel : discord.TextChannel
+        Channel to ingest messages from.
+    """
+    logging.info("Ingesting messages from %s", channel.name)
+    ingest_message = await channel.send(f"Ingesting messages from {channel.name}...")
+    message_count = 0
+    async for historic_message in channel.history(limit=None):
+        if historic_message.author != client.user:
+            await post_message_to_elastic(historic_message)
+            message_count += 1
+        if int(time()) % 10 == 0:
+            await ingest_message.edit(content=f"Ingested {message_count} messages from {channel.name}...", embed=None)
+
+    logging.info("Successfully ingested %d messages from %s.",
+                    message_count, channel.name)
+    await channel.send(f"Successfully ingested {message_count} messages from {channel.name}.")
+
+
 async def post_message_to_elastic(message: discord.Message) -> requests.Response:
     """
     Post Discord message to Elastic database
@@ -80,7 +106,7 @@ async def post_message_to_elastic(message: discord.Message) -> requests.Response
     logging.debug("Payload: %s", payload)
 
     resp = requests.post(
-        url=f'{elastic_base_url}{elastic_index}/_doc',
+        url=f'{elastic_base_url}/{elastic_index}/_doc',
         data=json.dumps(payload),
         headers={'Content-Type': 'application/json',
                  'Authorization': f"ApiKey {elastic_token}"},
@@ -115,31 +141,20 @@ async def on_message(message: discord.Message) -> None:
         logging.debug("Message sent by bot user, ignoring...")
         return
 
-    if message.content is not None and message.content.startswith('!') and \
-            len(message.content) > 1 and message.author.id in superusers:
-        command = message.content[1:].split(' ')[0]
-        logging.info("Processing command %s", command)
+    if message.content is None or not message.content.startswith('!'):
+        await post_message_to_elastic(message)
 
-        if command == 'ingest':
-            logging.info("Ingesting messages from %s", message.channel.name)
-            await message.channel.send(f"Ingesting messages from {message.channel.name}...")
-            message_count = 0
-            async for historic_message in message.channel.history(limit=None):
-                if historic_message.author != client.user:
-                    await post_message_to_elastic(historic_message)
-                    message_count += 1
-
-            logging.info("Successfully ingested %d messages from %s.",
-                         message_count, message.channel.name)
-            await message.channel.send(f"Successfully ingested {message_count} messages from {message.channel.name}.")
+    match message.content.split():
+        case ['!ingest'] if message.author.id in superusers:
+            await ingest_messages(message.channel)
             return
-        if command == 'verbose':
+        case ['!verbose'] if message.author.id in superusers:
             verbose = not verbose
             logging.info("Verbose toggled to %s.", verbose)
             await message.channel.send(f"Verbose toggled to {verbose}.")
             return
-
-    await post_message_to_elastic(message)
+        case [unknown, _]:
+            await message.channel.send(f"Unrecognized command '{unknown}'")
 
 
 def main():
